@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Periodic Table Master</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
             --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --border: #334155;
@@ -12,28 +13,28 @@
             --noble: #7c3aed; --lanthanide: #d946ef; --actinide: #ec4899;
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; touch-action: manipulation; }
 
         body, html {
             margin: 0; padding: 0; height: 100vh; width: 100vw;
             background: var(--bg); color: var(--text);
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            overflow: hidden; /* No scrolling */
+            overflow: hidden; /* Locks vertical scrolling */
         }
 
         .game-container {
             display: flex; flex-direction: column;
             height: 100%; width: 100%; padding: 10px;
-            align-items: center; justify-content: space-between;
+            align-items: center; justify-content: flex-start;
         }
 
         /* Stats & Controls Bar */
         .top-bar {
-            display: flex; gap: 20px; align-items: center;
-            background: var(--card); padding: 8px 25px;
+            display: flex; gap: 20px; align-items: center; justify-content: center;
+            background: var(--card); padding: 8px 25px; margin-bottom: 15px;
             border-radius: 50px; border: 1px solid var(--border);
             box-shadow: 0 8px 20px rgba(0,0,0,0.4);
-            z-index: 10;
+            z-index: 10; flex-wrap: wrap; 
         }
 
         .stat-item { font-size: 0.9rem; font-weight: 500; }
@@ -41,15 +42,19 @@
 
         .btn {
             background: #334155; color: white; border: 1px solid #475569;
-            padding: 5px 15px; border-radius: 20px; cursor: pointer;
+            padding: 6px 16px; border-radius: 20px; cursor: pointer;
             font-size: 0.8rem; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px; /* Aligns icons properly */
         }
+        .btn i { font-size: 0.9rem; }
         .btn:hover { background: #475569; transform: translateY(-1px); }
         .btn-skip { background: #1e293b; color: #94a3b8; }
+        .btn-hint { color: #fcd34d; } /* Gives the hint icon a yellowish tint */
 
         /* Element Spawner */
         #element-source {
             height: 100px; display: flex; align-items: center; justify-content: center;
+            margin-bottom: 10px; flex-shrink: 0;
         }
 
         .draggable-element {
@@ -58,34 +63,42 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             cursor: grab; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
             animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: border-color 0.2s;
         }
         .draggable-element:active { cursor: grabbing; }
         .draggable-element strong { font-size: 1.6rem; }
-        .draggable-element span { font-size: 0.7rem; opacity: 0.8; }
+        .draggable-element span { font-size: 0.7rem; opacity: 0.8; text-align: center;}
 
-        /* The Grid */
+        /* The Grid & Responsive Wrapper */
         .table-wrap {
-            flex: 1; display: flex; align-items: center; justify-content: center;
-            width: 100%;
+            flex: 1; display: flex; 
+            align-items: flex-start; justify-content: flex-start;
+            width: 100%; overflow-x: auto; overflow-y: hidden;
+            padding-bottom: 20px; 
+        }
+
+        @media (min-width: 900px) {
+            .table-wrap { justify-content: center; align-items: center; } 
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(18, min(5vw, 48px));
-            grid-template-rows: repeat(10, min(8vh, 52px));
-            gap: 4px;
+            grid-template-columns: repeat(18, clamp(35px, 4vw, 50px));
+            grid-template-rows: repeat(10, clamp(40px, 6vh, 52px));
+            gap: 4px; padding: 0 15px;
+            min-width: max-content; 
         }
 
         .slot {
             background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border);
             border-radius: 4px; display: flex; align-items: center; justify-content: center;
-            font-size: min(1.8vw, 0.75rem); transition: 0.2s;
+            font-size: clamp(0.65rem, 1.5vw, 0.85rem); transition: 0.2s; cursor: pointer;
         }
         .slot.empty { border: none; background: transparent; pointer-events: none; }
         .slot.drag-over { background: rgba(255,255,255,0.15); border-color: #fff; transform: scale(1.05); }
         
         /* Spacer Row */
-        .slot[data-row="8"] { height: 15px; }
+        .slot[data-row="8"] { height: 15px; border: none; }
 
         /* Element Colors */
         .alkali { background: var(--alkali); } .alkaline { background: var(--alkaline); }
@@ -94,7 +107,7 @@
         .noble { background: var(--noble); } .lanthanide { background: var(--lanthanide); }
         .actinide { background: var(--actinide); }
 
-        .filled { animation: celebrate 0.5s ease; border: none; font-weight: bold; color: white; }
+        .filled { animation: celebrate 0.5s ease; border: none; font-weight: bold; color: white; cursor: default; }
         .hint-pulse { animation: pulse 0.6s infinite alternate; border: 2px solid white !important; z-index: 5; }
 
         @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -102,9 +115,11 @@
         @keyframes celebrate { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
 
         /* Mobile Adjustments */
-        @media (max-width: 800px) {
+        @media (max-width: 600px) {
             .grid { gap: 2px; }
-            .top-bar { gap: 10px; padding: 5px 15px; }
+            .top-bar { gap: 10px; padding: 5px 15px; margin-bottom: 5px; }
+            .draggable-element { width: 70px; height: 70px; }
+            .draggable-element strong { font-size: 1.4rem; }
         }
     </style>
 </head>
@@ -114,8 +129,12 @@
     <div class="top-bar">
         <div class="stat-item">Score: <strong id="score">0</strong></div>
         <div class="stat-item">Left: <strong id="remaining">118</strong></div>
-        <button class="btn" id="hint-btn">💡 Hint (-5)</button>
-        <button class="btn btn-skip" id="skip-btn">⏭️ Skip</button>
+        <button class="btn" id="hint-btn">
+            <i class="fa-solid fa-lightbulb btn-hint"></i> Hint (-5)
+        </button>
+        <button class="btn btn-skip" id="skip-btn">
+            <i class="fa-solid fa-forward-step"></i> Skip
+        </button>
     </div>
 
     <div id="element-source"></div>
@@ -132,6 +151,8 @@
     ];
 
     let score = 0, current = null, pool = [...elements];
+    let isMobileSelected = false; 
+    
     const grid = document.getElementById('grid'), source = document.getElementById('element-source'),
           scoreEl = document.getElementById('score'), remEl = document.getElementById('remaining'),
           hintBtn = document.getElementById('hint-btn'), skipBtn = document.getElementById('skip-btn');
@@ -151,6 +172,7 @@
                     slot.addEventListener('dragenter', () => slot.classList.add('drag-over'));
                     slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
                     slot.addEventListener('drop', handleDrop);
+                    slot.addEventListener('click', handleMobileClick);
                 }
                 grid.appendChild(slot);
             }
@@ -160,10 +182,12 @@
 
     function spawn() {
         if (!pool.length) {
-            source.innerHTML = "<h2>Mission Accomplished! 🏆</h2>";
+            // Replaced trophy emoji with FontAwesome trophy icon
+            source.innerHTML = "<h2 style='display: flex; align-items: center; gap: 10px;'>Mission Accomplished! <i class='fa-solid fa-trophy' style='color: #fbbf24;'></i></h2>";
             return;
         }
-        // Pick a random element from the remaining pool
+        
+        isMobileSelected = false; 
         const idx = Math.floor(Math.random() * pool.length);
         current = pool.splice(idx, 1)[0];
         remEl.innerText = pool.length + 1;
@@ -176,36 +200,49 @@
             </div>
         `;
 
-        document.getElementById('current-atom').addEventListener('dragstart', (e) => {
+        const atomEl = document.getElementById('current-atom');
+        
+        atomEl.addEventListener('dragstart', (e) => {
             e.dataTransfer.setData('text', current.id);
         });
+
+        atomEl.addEventListener('click', () => {
+            isMobileSelected = true;
+            atomEl.style.borderColor = '#fbbf24'; 
+            atomEl.style.boxShadow = '0 0 15px rgba(251, 191, 36, 0.5)';
+        });
+    }
+
+    function processPlacement(slotElement) {
+        if (parseInt(slotElement.dataset.row) === current.row && parseInt(slotElement.dataset.col) === current.col) {
+            slotElement.classList.add('filled', current.cat);
+            slotElement.innerHTML = `<span>${current.symbol}</span>`;
+            slotElement.style.pointerEvents = 'none';
+            score += 10; scoreEl.innerText = score;
+            spawn();
+        } else {
+            slotElement.style.background = "#450a0a";
+            setTimeout(() => slotElement.style.background = "", 500);
+        }
     }
 
     function handleDrop(e) {
         this.classList.remove('drag-over');
-        const droppedId = e.dataTransfer.getData('text');
-        
-        if (parseInt(this.dataset.row) === current.row && parseInt(this.dataset.col) === current.col) {
-            this.classList.add('filled', current.cat);
-            this.innerHTML = `<span>${current.symbol}</span>`;
-            this.style.pointerEvents = 'none';
-            score += 10; scoreEl.innerText = score;
-            spawn();
-        } else {
-            // Error feedback
-            this.style.background = "#450a0a";
-            setTimeout(() => this.style.background = "", 500);
+        processPlacement(this);
+    }
+
+    function handleMobileClick() {
+        if (isMobileSelected && current) {
+            processPlacement(this);
         }
     }
 
-    // Skip Button: Put back in pool and spawn another
     skipBtn.addEventListener('click', () => {
         if (!current) return;
         pool.push(current);
         spawn();
     });
 
-    // Hint Button
     hintBtn.addEventListener('click', () => {
         if (!current) return;
         const target = Array.from(document.querySelectorAll('.slot')).find(s => 
