@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Periodic Table Master</title>
+    <style>
+        :root {
+            --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --border: #334155;
+            --alkali: #ef4444; --alkaline: #fbbf24; --transition: #92400e;
+            --post-transition: #10b981; --metalloid: #0d9488; --nonmetal: #2563eb;
+            --noble: #7c3aed; --lanthanide: #d946ef; --actinide: #ec4899;
+        }
+
+        * { box-sizing: border-box; }
+
+        body, html {
+            margin: 0; padding: 0; height: 100vh; width: 100vw;
+            background: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* No scrolling */
+        }
+
+        .game-container {
+            display: flex; flex-direction: column;
+            height: 100%; width: 100%; padding: 10px;
+            align-items: center; justify-content: space-between;
+        }
+
+        /* Stats & Controls Bar */
+        .top-bar {
+            display: flex; gap: 20px; align-items: center;
+            background: var(--card); padding: 8px 25px;
+            border-radius: 50px; border: 1px solid var(--border);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            z-index: 10;
+        }
+
+        .stat-item { font-size: 0.9rem; font-weight: 500; }
+        .stat-item strong { color: #60a5fa; }
+
+        .btn {
+            background: #334155; color: white; border: 1px solid #475569;
+            padding: 5px 15px; border-radius: 20px; cursor: pointer;
+            font-size: 0.8rem; transition: all 0.2s;
+        }
+        .btn:hover { background: #475569; transform: translateY(-1px); }
+        .btn-skip { background: #1e293b; color: #94a3b8; }
+
+        /* Element Spawner */
+        #element-source {
+            height: 100px; display: flex; align-items: center; justify-content: center;
+        }
+
+        .draggable-element {
+            width: 80px; height: 80px; background: #334155;
+            border: 2px solid #64748b; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: grab; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .draggable-element:active { cursor: grabbing; }
+        .draggable-element strong { font-size: 1.6rem; }
+        .draggable-element span { font-size: 0.7rem; opacity: 0.8; }
+
+        /* The Grid */
+        .table-wrap {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            width: 100%;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(18, min(5vw, 48px));
+            grid-template-rows: repeat(10, min(8vh, 52px));
+            gap: 4px;
+        }
+
+        .slot {
+            background: rgba(30, 41, 59, 0.4); border: 1px solid var(--border);
+            border-radius: 4px; display: flex; align-items: center; justify-content: center;
+            font-size: min(1.8vw, 0.75rem); transition: 0.2s;
+        }
+        .slot.empty { border: none; background: transparent; pointer-events: none; }
+        .slot.drag-over { background: rgba(255,255,255,0.15); border-color: #fff; transform: scale(1.05); }
+        
+        /* Spacer Row */
+        .slot[data-row="8"] { height: 15px; }
+
+        /* Element Colors */
+        .alkali { background: var(--alkali); } .alkaline { background: var(--alkaline); }
+        .transition { background: var(--transition); } .post-transition { background: var(--post-transition); }
+        .metalloid { background: var(--metalloid); } .nonmetal { background: var(--nonmetal); }
+        .noble { background: var(--noble); } .lanthanide { background: var(--lanthanide); }
+        .actinide { background: var(--actinide); }
+
+        .filled { animation: celebrate 0.5s ease; border: none; font-weight: bold; color: white; }
+        .hint-pulse { animation: pulse 0.6s infinite alternate; border: 2px solid white !important; z-index: 5; }
+
+        @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes pulse { from { box-shadow: 0 0 0px white; } to { box-shadow: 0 0 15px white; background: rgba(255,255,255,0.2); } }
+        @keyframes celebrate { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+        /* Mobile Adjustments */
+        @media (max-width: 800px) {
+            .grid { gap: 2px; }
+            .top-bar { gap: 10px; padding: 5px 15px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="top-bar">
+        <div class="stat-item">Score: <strong id="score">0</strong></div>
+        <div class="stat-item">Left: <strong id="remaining">118</strong></div>
+        <button class="btn" id="hint-btn">💡 Hint (-5)</button>
+        <button class="btn btn-skip" id="skip-btn">⏭️ Skip</button>
+    </div>
+
+    <div id="element-source"></div>
+
+    <div class="table-wrap">
+        <div class="grid" id="grid"></div>
+    </div>
+</div>
+
+<script>
+    // FULL DATASET
+    const elements = [
+        {id:1,symbol:"H",name:"Hydrogen",row:1,col:1,cat:"nonmetal"},{id:2,symbol:"He",name:"Helium",row:1,col:18,cat:"noble"},{id:3,symbol:"Li",name:"Lithium",row:2,col:1,cat:"alkali"},{id:4,symbol:"Be",name:"Beryllium",row:2,col:2,cat:"alkaline"},{id:5,symbol:"B",name:"Boron",row:2,col:13,cat:"metalloid"},{id:6,symbol:"C",name:"Carbon",row:2,col:14,cat:"nonmetal"},{id:7,symbol:"N",name:"Nitrogen",row:2,col:15,cat:"nonmetal"},{id:8,symbol:"O",name:"Oxygen",row:2,col:16,cat:"nonmetal"},{id:9,symbol:"F",name:"Fluorine",row:2,col:17,cat:"nonmetal"},{id:10,symbol:"Ne",name:"Neon",row:2,col:18,cat:"noble"},{id:11,symbol:"Na",name:"Sodium",row:3,col:1,cat:"alkali"},{id:12,symbol:"Mg",name:"Magnesium",row:3,col:2,cat:"alkaline"},{id:13,symbol:"Al",name:"Aluminum",row:3,col:13,cat:"post-transition"},{id:14,symbol:"Si",name:"Silicon",row:3,col:14,cat:"metalloid"},{id:15,symbol:"P",name:"Phosphorus",row:3,col:15,cat:"nonmetal"},{id:16,symbol:"S",name:"Sulfur",row:3,col:16,cat:"nonmetal"},{id:17,symbol:"Cl",name:"Chlorine",row:3,col:17,cat:"nonmetal"},{id:18,symbol:"Ar",name:"Argon",row:3,col:18,cat:"noble"},{id:19,symbol:"K",name:"Potassium",row:4,col:1,cat:"alkali"},{id:20,symbol:"Ca",name:"Calcium",row:4,col:2,cat:"alkaline"},{id:21,symbol:"Sc",name:"Scandium",row:4,col:3,cat:"transition"},{id:22,symbol:"Ti",name:"Titanium",row:4,col:4,cat:"transition"},{id:23,symbol:"V",name:"Vanadium",row:4,col:5,cat:"transition"},{id:24,symbol:"Cr",name:"Chromium",row:4,col:6,cat:"transition"},{id:25,symbol:"Mn",name:"Manganese",row:4,col:7,cat:"transition"},{id:26,symbol:"Fe",name:"Iron",row:4,col:8,cat:"transition"},{id:27,symbol:"Co",name:"Cobalt",row:4,col:9,cat:"transition"},{id:28,symbol:"Ni",name:"Nickel",row:4,col:10,cat:"transition"},{id:29,symbol:"Cu",name:"Copper",row:4,col:11,cat:"transition"},{id:30,symbol:"Zn",name:"Zinc",row:4,col:12,cat:"transition"},{id:31,symbol:"Ga",name:"Gallium",row:4,col:13,cat:"post-transition"},{id:32,symbol:"Ge",name:"Germanium",row:4,col:14,cat:"metalloid"},{id:33,symbol:"As",name:"Arsenic",row:4,col:15,cat:"metalloid"},{id:34,symbol:"Se",name:"Selenium",row:4,col:16,cat:"nonmetal"},{id:35,symbol:"Br",name:"Bromine",row:4,col:17,cat:"nonmetal"},{id:36,symbol:"Kr",name:"Krypton",row:4,col:18,cat:"noble"},{id:37,symbol:"Rb",name:"Rubidium",row:5,col:1,cat:"alkali"},{id:38,symbol:"Sr",name:"Strontium",row:5,col:2,cat:"alkaline"},{id:39,symbol:"Y",name:"Yttrium",row:5,col:3,cat:"transition"},{id:40,symbol:"Zr",name:"Zirconium",row:5,col:4,cat:"transition"},{id:41,symbol:"Nb",name:"Niobium",row:5,col:5,cat:"transition"},{id:42,symbol:"Mo",name:"Molybdenum",row:5,col:6,cat:"transition"},{id:43,symbol:"Tc",name:"Technetium",row:5,col:7,cat:"transition"},{id:44,symbol:"Ru",name:"Ruthenium",row:5,col:8,cat:"transition"},{id:45,symbol:"Rh",name:"Rhodium",row:5,col:9,cat:"transition"},{id:46,symbol:"Pd",name:"Palladium",row:5,col:10,cat:"transition"},{id:47,symbol:"Ag",name:"Silver",row:5,col:11,cat:"transition"},{id:48,symbol:"Cd",name:"Cadmium",row:5,col:12,cat:"transition"},{id:49,symbol:"In",name:"Indium",row:5,col:13,cat:"post-transition"},{id:50,symbol:"Sn",name:"Tin",row:5,col:14,cat:"post-transition"},{id:51,symbol:"Sb",name:"Antimony",row:5,col:15,cat:"metalloid"},{id:52,symbol:"Te",name:"Tellurium",row:5,col:16,cat:"metalloid"},{id:53,symbol:"I",name:"Iodine",row:5,col:17,cat:"nonmetal"},{id:54,symbol:"Xe",name:"Xenon",row:5,col:18,cat:"noble"},{id:55,symbol:"Cs",name:"Cesium",row:6,col:1,cat:"alkali"},{id:56,symbol:"Ba",name:"Barium",row:6,col:2,cat:"alkaline"},{id:57,symbol:"La",name:"Lanthanum",row:9,col:4,cat:"lanthanide"},{id:58,symbol:"Ce",name:"Cerium",row:9,col:5,cat:"lanthanide"},{id:59,symbol:"Pr",name:"Praseodymium",row:9,col:6,cat:"lanthanide"},{id:60,symbol:"Nd",name:"Neodymium",row:9,col:7,cat:"lanthanide"},{id:61,symbol:"Pm",name:"Promethium",row:9,col:8,cat:"lanthanide"},{id:62,symbol:"Sm",name:"Samarium",row:9,col:9,cat:"lanthanide"},{id:63,symbol:"Eu",name:"Europium",row:9,col:10,cat:"lanthanide"},{id:64,symbol:"Gd",name:"Gadolinium",row:9,col:11,cat:"lanthanide"},{id:65,symbol:"Tb",name:"Terbium",row:9,col:12,cat:"lanthanide"},{id:66,symbol:"Dy",name:"Dysprosium",row:9,col:13,cat:"lanthanide"},{id:67,symbol:"Ho",name:"Holmium",row:9,col:14,cat:"lanthanide"},{id:68,symbol:"Er",name:"Erbium",row:9,col:15,cat:"lanthanide"},{id:69,symbol:"Tm",name:"Thulium",row:9,col:16,cat:"lanthanide"},{id:70,symbol:"Yb",name:"Ytterbium",row:9,col:17,cat:"lanthanide"},{id:71,symbol:"Lu",name:"Lutetium",row:9,col:18,cat:"lanthanide"},{id:72,symbol:"Hf",name:"Hafnium",row:6,col:4,cat:"transition"},{id:73,symbol:"Ta",name:"Tantalum",row:6,col:5,cat:"transition"},{id:74,symbol:"W",name:"Tungsten",row:6,col:6,cat:"transition"},{id:75,symbol:"Re",name:"Rhenium",row:6,col:7,cat:"transition"},{id:76,symbol:"Os",name:"Osmium",row:6,col:8,cat:"transition"},{id:77,symbol:"Ir",name:"Iridium",row:6,col:9,cat:"transition"},{id:78,symbol:"Pt",name:"Platinum",row:6,col:10,cat:"transition"},{id:79,symbol:"Au",name:"Gold",row:6,col:11,cat:"transition"},{id:80,symbol:"Hg",name:"Mercury",row:6,col:12,cat:"transition"},{id:81,symbol:"Tl",name:"Thallium",row:6,col:13,cat:"post-transition"},{id:82,symbol:"Pb",name:"Lead",row:6,col:14,cat:"post-transition"},{id:83,symbol:"Bi",name:"Bismuth",row:6,col:15,cat:"post-transition"},{id:84,symbol:"Po",name:"Polonium",row:6,col:16,cat:"metalloid"},{id:85,symbol:"At",name:"Astatine",row:6,col:17,cat:"metalloid"},{id:86,symbol:"Rn",name:"Radon",row:6,col:18,cat:"noble"},{id:87,symbol:"Fr",name:"Francium",row:7,col:1,cat:"alkali"},{id:88,symbol:"Ra",name:"Radium",row:7,col:2,cat:"alkaline"},{id:89,symbol:"Ac",name:"Actinium",row:10,col:4,cat:"actinide"},{id:90,symbol:"Th",name:"Thorium",row:10,col:5,cat:"actinide"},{id:91,symbol:"Pa",name:"Protactinium",row:10,col:6,cat:"actinide"},{id:92,symbol:"U",name:"Uranium",row:10,col:7,cat:"actinide"},{id:93,symbol:"Np",name:"Neptunium",row:10,col:8,cat:"actinide"},{id:94,symbol:"Pu",name:"Plutonium",row:10,col:9,cat:"actinide"},{id:95,symbol:"Am",name:"Americium",row:10,col:10,cat:"actinide"},{id:96,symbol:"Cm",name:"Curium",row:10,col:11,cat:"actinide"},{id:97,symbol:"Bk",name:"Berkelium",row:10,col:12,cat:"actinide"},{id:98,symbol:"Cf",name:"Californium",row:10,col:13,cat:"actinide"},{id:99,symbol:"Es",name:"Einsteinium",row:10,col:14,cat:"actinide"},{id:100,symbol:"Fm",name:"Fermium",row:10,col:15,cat:"actinide"},{id:101,symbol:"Md",name:"Mendelevium",row:10,col:16,cat:"actinide"},{id:102,symbol:"No",name:"Nobelium",row:10,col:17,cat:"actinide"},{id:103,symbol:"Lr",name:"Lawrencium",row:10,col:18,cat:"actinide"},{id:104,symbol:"Rf",name:"Rutherfordium",row:7,col:4,cat:"transition"},{id:105,symbol:"Db",name:"Dubnium",row:7,col:5,cat:"transition"},{id:106,symbol:"Sg",name:"Seaborgium",row:7,col:6,cat:"transition"},{id:107,symbol:"Bh",name:"Bohrium",row:7,col:7,cat:"transition"},{id:108,symbol:"Hs",name:"Hassium",row:7,col:8,cat:"transition"},{id:109,symbol:"Mt",name:"Meitnerium",row:7,col:9,cat:"transition"},{id:110,symbol:"Ds",name:"Darmstadtium",row:7,col:10,cat:"transition"},{id:111,symbol:"Rg",name:"Roentgenium",row:7,col:11,cat:"transition"},{id:112,symbol:"Cn",name:"Copernicium",row:7,col:12,cat:"transition"},{id:113,symbol:"Nh",name:"Nihonium",row:7,col:13,cat:"post-transition"},{id:114,symbol:"Fl",name:"Flerovium",row:7,col:14,cat:"post-transition"},{id:115,symbol:"Mc",name:"Moscovium",row:7,col:15,cat:"post-transition"},{id:116,symbol:"Lv",name:"Livermorium",row:7,col:16,cat:"post-transition"},{id:117,symbol:"Ts",name:"Tennessine",row:7,col:17,cat:"metalloid"},{id:118,symbol:"Og",name:"Oganesson",row:7,col:18,cat:"noble"}
+    ];
+
+    let score = 0, current = null, pool = [...elements];
+    const grid = document.getElementById('grid'), source = document.getElementById('element-source'),
+          scoreEl = document.getElementById('score'), remEl = document.getElementById('remaining'),
+          hintBtn = document.getElementById('hint-btn'), skipBtn = document.getElementById('skip-btn');
+
+    function init() {
+        grid.innerHTML = '';
+        for (let r = 1; r <= 10; r++) {
+            for (let c = 1; c <= 18; c++) {
+                const slot = document.createElement('div');
+                const isElementSlot = elements.some(e => e.row === r && e.col === c);
+                
+                slot.className = isElementSlot ? 'slot' : 'slot empty';
+                slot.dataset.row = r; slot.dataset.col = c;
+
+                if (isElementSlot) {
+                    slot.addEventListener('dragover', e => e.preventDefault());
+                    slot.addEventListener('dragenter', () => slot.classList.add('drag-over'));
+                    slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+                    slot.addEventListener('drop', handleDrop);
+                }
+                grid.appendChild(slot);
+            }
+        }
+        spawn();
+    }
+
+    function spawn() {
+        if (!pool.length) {
+            source.innerHTML = "<h2>Mission Accomplished! 🏆</h2>";
+            return;
+        }
+        // Pick a random element from the remaining pool
+        const idx = Math.floor(Math.random() * pool.length);
+        current = pool.splice(idx, 1)[0];
+        remEl.innerText = pool.length + 1;
+        
+        source.innerHTML = `
+            <div class="draggable-element" draggable="true" id="current-atom">
+                <small>${current.id}</small>
+                <strong>${current.symbol}</strong>
+                <span>${current.name}</span>
+            </div>
+        `;
+
+        document.getElementById('current-atom').addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text', current.id);
+        });
+    }
+
+    function handleDrop(e) {
+        this.classList.remove('drag-over');
+        const droppedId = e.dataTransfer.getData('text');
+        
+        if (parseInt(this.dataset.row) === current.row && parseInt(this.dataset.col) === current.col) {
+            this.classList.add('filled', current.cat);
+            this.innerHTML = `<span>${current.symbol}</span>`;
+            this.style.pointerEvents = 'none';
+            score += 10; scoreEl.innerText = score;
+            spawn();
+        } else {
+            // Error feedback
+            this.style.background = "#450a0a";
+            setTimeout(() => this.style.background = "", 500);
+        }
+    }
+
+    // Skip Button: Put back in pool and spawn another
+    skipBtn.addEventListener('click', () => {
+        if (!current) return;
+        pool.push(current);
+        spawn();
+    });
+
+    // Hint Button
+    hintBtn.addEventListener('click', () => {
+        if (!current) return;
+        const target = Array.from(document.querySelectorAll('.slot')).find(s => 
+            s.dataset.row == current.row && s.dataset.col == current.col
+        );
+        if (target) {
+            target.classList.add('hint-pulse');
+            score = Math.max(0, score - 5);
+            scoreEl.innerText = score;
+            setTimeout(() => target.classList.remove('hint-pulse'), 2000);
+        }
+    });
+
+    init();
+</script>
+
+</body>
+</html>
